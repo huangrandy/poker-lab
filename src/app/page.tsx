@@ -12,36 +12,38 @@ import { useState } from "react";
 
 type Suit = "spades" | "hearts" | "diamonds" | "clubs";
 
-type CardData = {
+type CardTemplate = {
   rank: string;
-  suit: Suit;
-  suitLabel: string;
-  isRed: boolean;
   offsetY?: number;
   tilt?: number;
   overlap?: number;
 };
 
-const cards: CardData[] = [
+type CardData = CardTemplate & {
+  suit: Suit;
+  suitLabel: string;
+  isRed: boolean;
+};
+
+const cards: CardTemplate[] = [
   {
     rank: "A",
-    suit: "spades",
-    suitLabel: "Spades",
-    isRed: false,
     tilt: -8,
     offsetY: 0,
   },
   {
     rank: "K",
-    suit: "hearts",
-    suitLabel: "Hearts",
-    isRed: true,
     tilt: 8,
     offsetY: 14,
   },
 ];
 
 export default function Home() {
+  const [suits, setSuits] = useState<[Suit, Suit]>(["spades", "hearts"]);
+  const hand = cards.map((card, index) =>
+    createCardData(card, suits[index], index === 0 ? 0 : -24)
+  );
+
   return (
     <main style={styles.page}>
       <div style={styles.shell}>
@@ -53,13 +55,36 @@ export default function Home() {
           </p>
         </div>
 
+        <div style={styles.menuBar}>
+          {suits.map((suit, index) => (
+            <label key={`suit-${index}`} style={styles.menuItem}>
+              <span style={styles.menuLabel}>
+                {index === 0 ? "Left card" : "Right card"}
+              </span>
+              <select
+                value={suit}
+                onChange={(event) => {
+                  const nextSuit = event.target.value as Suit;
+                  setSuits((current) => {
+                    const next = [...current] as [Suit, Suit];
+                    next[index] = nextSuit;
+                    return next;
+                  });
+                }}
+                style={styles.select}
+              >
+                <option value="spades">Spades</option>
+                <option value="hearts">Hearts</option>
+                <option value="diamonds">Diamonds</option>
+                <option value="clubs">Clubs</option>
+              </select>
+            </label>
+          ))}
+        </div>
+
         <div style={styles.hand}>
-          {cards.map((card, index) => (
-            <PokerCard
-              key={`${card.rank}-${card.suit}`}
-              {...card}
-              overlap={index === 0 ? 0 : -24}
-            />
+          {hand.map((card) => (
+            <PokerCard key={`${card.rank}-${card.suit}`} {...card} />
           ))}
         </div>
       </div>
@@ -225,34 +250,117 @@ function PokerFace({
     clubs: "♣",
   }[suit];
 
-  const textColor = isRed ? "#dc2626" : "#0f172a";
+  const textColor = isRed ? "#ef476f" : "#4a3f7a";
+  const glowColor = isRed ? "rgba(255, 84, 158, 0.65)" : "rgba(184, 151, 255, 0.7)";
+  const softGlowColor = isRed ? "rgba(255, 84, 158, 0.28)" : "rgba(184, 151, 255, 0.3)";
 
   return (
     <div style={styles.faceContent}>
       <div style={{ ...styles.faceTop, color: textColor }}>
         <div style={styles.faceCornerStack}>
-          <span style={styles.rank}>{rank}</span>
-          <span style={styles.cornerSuit}>{suitGlyph}</span>
+          <span
+            style={{
+              ...styles.rank,
+              color: textColor,
+              textShadow: `0 0 2px rgba(255,255,255,0.9), 0 0 10px ${softGlowColor}, 0 0 22px ${glowColor}`,
+            }}
+          >
+            {rank}
+          </span>
+          <span
+            style={{
+              ...styles.cornerSuit,
+              color: textColor,
+              textShadow: `0 0 2px rgba(255,255,255,0.9), 0 0 10px ${softGlowColor}, 0 0 22px ${glowColor}`,
+            }}
+          >
+            {suitGlyph}
+          </span>
         </div>
-        <span style={styles.cornerSuit}>{suitGlyph}</span>
+        <span
+          style={{
+            ...styles.cornerSuit,
+            color: textColor,
+            textShadow: `0 0 2px rgba(255,255,255,0.9), 0 0 10px ${softGlowColor}, 0 0 22px ${glowColor}`,
+          }}
+        >
+          {suitGlyph}
+        </span>
       </div>
 
       <div style={{ ...styles.faceCenter, color: textColor }}>
         <div style={styles.centerStack}>
-          <div style={styles.centerSuit}>{suitGlyph}</div>
-          <div style={styles.centerLabel}>{suit}</div>
+          <div
+            style={{
+              ...styles.centerSuit,
+              color: textColor,
+              textShadow: `0 0 3px rgba(255,255,255,0.95), 0 0 14px ${softGlowColor}, 0 0 32px ${glowColor}`,
+              filter: "drop-shadow(0 0 12px rgba(255,255,255,0.14))",
+            }}
+          >
+            {suitGlyph}
+          </div>
+          <div
+            style={{
+              ...styles.centerLabel,
+              color: textColor,
+              textShadow: `0 0 8px ${softGlowColor}`,
+            }}
+          >
+            {suit}
+          </div>
         </div>
       </div>
 
       <div style={{ ...styles.faceBottom, color: textColor }}>
         <div style={styles.faceCornerStack}>
-          <span style={styles.rank}>{rank}</span>
-          <span style={styles.cornerSuit}>{suitGlyph}</span>
+          <span
+            style={{
+              ...styles.rank,
+              color: textColor,
+              textShadow: `0 0 2px rgba(255,255,255,0.9), 0 0 10px ${softGlowColor}, 0 0 22px ${glowColor}`,
+            }}
+          >
+            {rank}
+          </span>
+          <span
+            style={{
+              ...styles.cornerSuit,
+              color: textColor,
+              textShadow: `0 0 2px rgba(255,255,255,0.9), 0 0 10px ${softGlowColor}, 0 0 22px ${glowColor}`,
+            }}
+          >
+            {suitGlyph}
+          </span>
         </div>
-        <span style={styles.cornerSuit}>{suitGlyph}</span>
+        <span
+          style={{
+            ...styles.cornerSuit,
+            color: textColor,
+            textShadow: `0 0 2px rgba(255,255,255,0.9), 0 0 10px ${softGlowColor}, 0 0 22px ${glowColor}`,
+          }}
+        >
+          {suitGlyph}
+        </span>
       </div>
     </div>
   );
+}
+
+function createCardData(
+  card: CardTemplate,
+  suit: Suit,
+  overlap: number
+): CardData {
+  const suitLabel = suit.charAt(0).toUpperCase() + suit.slice(1);
+
+  return {
+    ...card,
+    suit,
+    suitLabel,
+    isRed: suit === "hearts" || suit === "diamonds",
+    overlap,
+  };
 }
 
 const styles: Record<string, CSSProperties> = {
@@ -297,6 +405,38 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "14px",
     lineHeight: 1.6,
     color: "rgba(255,255,255,0.7)",
+  },
+  menuBar: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "12px",
+  },
+  menuItem: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+    minWidth: "150px",
+  },
+  menuLabel: {
+    fontSize: "11px",
+    letterSpacing: "0.22em",
+    textTransform: "uppercase",
+    color: "rgba(255,255,255,0.72)",
+  },
+  select: {
+    appearance: "none",
+    WebkitAppearance: "none",
+    MozAppearance: "none",
+    borderRadius: "14px",
+    border: "1px solid rgba(255,255,255,0.2)",
+    background: "rgba(255,255,255,0.08)",
+    color: "#fff",
+    padding: "12px 14px",
+    fontSize: "14px",
+    outline: "none",
+    backdropFilter: "blur(12px)",
   },
   hand: {
     display: "flex",
@@ -452,6 +592,9 @@ const styles: Record<string, CSSProperties> = {
   centerSuit: {
     fontSize: "84px",
     lineHeight: 1,
+    textShadow:
+      "0 0 2px rgba(255,255,255,0.9), 0 0 10px rgba(255,255,255,0.45), 0 0 24px rgba(255,255,255,0.18)",
+    filter: "drop-shadow(0 0 8px rgba(255,255,255,0.12))",
   },
   centerLabel: {
     marginTop: "12px",
@@ -459,6 +602,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 600,
     letterSpacing: "0.45em",
     textTransform: "uppercase",
-    color: "rgba(0,0,0,0.35)",
+    color: "rgba(73, 53, 99, 0.48)",
+    textShadow: "0 0 8px rgba(255,255,255,0.18)",
   },
 };
