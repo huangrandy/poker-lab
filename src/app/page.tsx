@@ -8,6 +8,7 @@ import {
   useSpring,
   useTransform,
 } from "framer-motion";
+import Link from "next/link";
 import type { CSSProperties, MouseEvent, PointerEvent } from "react";
 import { useState } from "react";
 
@@ -71,6 +72,15 @@ export default function Home() {
   return (
     <main style={styles.page}>
       <div style={styles.shell}>
+        <div style={styles.demoNav}>
+          <Link href="/menu" style={styles.demoLink}>
+            Demo hub
+          </Link>
+          <Link href="/table" style={styles.demoLink}>
+            Table layout
+          </Link>
+        </div>
+
         <div style={styles.header}>
           <p style={styles.kicker}>Poker hand</p>
           <h1 style={styles.title}>Two-card hand</h1>
@@ -717,6 +727,24 @@ const styles: Record<string, CSSProperties> = {
   header: {
     textAlign: "center",
     maxWidth: "700px",
+  },
+  demoNav: {
+    display: "flex",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: "10px",
+    width: "100%",
+  },
+  demoLink: {
+    borderRadius: "9999px",
+    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(255,255,255,0.06)",
+    padding: "10px 16px",
+    fontSize: "12px",
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
+    color: "rgba(255,255,255,0.9)",
+    backdropFilter: "blur(12px)",
   },
   kicker: {
     margin: 0,

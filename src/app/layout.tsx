@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Poker Hand Demo",
-  description: "Interactive two-card poker hand with hover tilt and flips.",
+  title: "Poker Lab",
+  description: "Poker demo hub with a flip animation page and a table layout page.",
 };
 
 export default function RootLayout({
