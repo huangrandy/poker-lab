@@ -20,10 +20,8 @@ const DESIGN = {
   tableHeight: 760,
   seatRadiusX: 708,
   seatRadiusY: 392,
-  cardRadiusX: 592,
-  cardRadiusY: 320,
-  actionRadiusX: 472,
-  actionRadiusY: 252,
+  seatUnitWidth: 380,
+  seatUnitHeight: 220,
   seatWidth: 328,
   seatHeight: 132,
   cardWidth: 82,
@@ -36,6 +34,13 @@ const DESIGN = {
   potHeight: 72,
 } as const;
 
+type SeatLayout = {
+  kind: "center" | "side";
+  flipX: boolean;
+  flipY: boolean;
+  actionNudgeY?: number;
+};
+
 const seats: Seat[] = [
   { id: "seat-1", angle: 90, label: "Seat 1", stack: "$0", action: "Check" },
   { id: "seat-2", angle: 30, label: "Seat 2", stack: "$0", action: "Check" },
@@ -44,6 +49,28 @@ const seats: Seat[] = [
   { id: "seat-5", angle: 210, label: "Seat 5", stack: "$0", action: "Check" },
   { id: "seat-6", angle: 150, label: "Seat 6", stack: "$0", action: "Check" },
 ];
+
+const seatLayouts: Record<number, SeatLayout> = {
+  90: { kind: "center", flipX: false, flipY: false },
+  270: { kind: "center", flipX: false, flipY: true, actionNudgeY: -85 },
+  210: { kind: "side", flipX: false, flipY: false },
+  30: { kind: "side", flipX: true, flipY: true },
+  150: { kind: "side", flipX: false, flipY: true },
+  330: { kind: "side", flipX: true, flipY: false },
+};
+
+const seatLocalRects = {
+  center: {
+    banner: { left: 22, top: 64, width: 336, height: 132 },
+    cards: { left: 100, top: 0, width: 180, height: 118 },
+    action: { left: 122, top: 230, width: 136, height: 32 },
+  },
+  side: {
+    banner: { left: 20, top: 64, width: 340, height: 132 },
+    cards: { left: 8, top: 6, width: 180, height: 118 },
+    action: { left: 375, top: 50, width: 136, height: 32 },
+  },
+} as const;
 
 function useTableScale() {
   const [scale, setScale] = useState(1);
@@ -81,6 +108,27 @@ function scaledPoint(point: { x: number; y: number }, scale: number) {
   };
 }
 
+type SeatPlacement = Seat & {
+  left: number;
+  top: number;
+  layout: SeatLayout;
+};
+
+function mirrorRect(
+  rect: { left: number; top: number; width: number; height: number },
+  boxWidth: number,
+  boxHeight: number,
+  flipX: boolean,
+  flipY: boolean
+) {
+  return {
+    left: flipX ? boxWidth - rect.left - rect.width : rect.left,
+    top: flipY ? boxHeight - rect.top - rect.height : rect.top,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
 export default function TablePage() {
   const scale = useTableScale();
   const boardWidth = DESIGN.width * scale;
@@ -102,14 +150,19 @@ export default function TablePage() {
     "--community-card-height": `${DESIGN.communityCardHeight}px`,
   } as CSSProperties & Record<string, string | number>;
 
-  const seatRadii = {
-    seatX: DESIGN.seatRadiusX,
-    seatY: DESIGN.seatRadiusY,
-    cardX: DESIGN.cardRadiusX,
-    cardY: DESIGN.cardRadiusY,
-    actionX: DESIGN.actionRadiusX,
-    actionY: DESIGN.actionRadiusY,
-  };
+  const seatPlacements: SeatPlacement[] = seats.map((seat) => {
+    const point = scaledPoint(
+      pointOnEllipse(seat.angle, DESIGN.seatRadiusX, DESIGN.seatRadiusY),
+      scale
+    );
+
+    return {
+      ...seat,
+      left: point.x,
+      top: point.y,
+      layout: seatLayouts[seat.angle],
+    };
+  });
 
   return (
     <main style={styles.page}>
@@ -133,13 +186,13 @@ export default function TablePage() {
                 ...styles.pot,
                 width: DESIGN.potWidth * scale,
                 height: DESIGN.potHeight * scale,
-                top: 324 * scale,
+                top: 314 * scale,
               }}
             >
               <span style={{ ...styles.potLabel, fontSize: `${11 * scale}px` }}>
                 Pot
               </span>
-              <span style={{ ...styles.potValue, fontSize: `${30 * scale}px` }}>
+              <span style={{ ...styles.potValue, fontSize: `${44 * scale}px` }}>
                 $340
               </span>
             </div>
@@ -147,7 +200,7 @@ export default function TablePage() {
             <div
               style={{
                 ...styles.communityRow,
-                top: 466 * scale,
+                top: 438 * scale,
                 gap: 18 * scale,
                 width:
                   DESIGN.communityCardWidth * 5 * scale +
@@ -167,30 +220,50 @@ export default function TablePage() {
             </div>
           </div>
 
-          {seats.map((seat) => {
-            const seatPoint = scaledPoint(
-              pointOnEllipse(seat.angle, seatRadii.seatX, seatRadii.seatY),
-              scale
+          {seatPlacements.map((seat) => {
+            const localRects = seatLocalRects[seat.layout.kind];
+            const bannerRect = mirrorRect(
+              localRects.banner,
+              DESIGN.seatUnitWidth,
+              DESIGN.seatUnitHeight,
+              seat.layout.flipX,
+              seat.layout.flipY
             );
-            const cardPoint = scaledPoint(
-              pointOnEllipse(seat.angle, seatRadii.cardX, seatRadii.cardY),
-              scale
-            );
-            const actionPoint = scaledPoint(
-              pointOnEllipse(seat.angle, seatRadii.actionX, seatRadii.actionY),
-              scale
+            const cardsWidth = DESIGN.cardWidth * 2 + DESIGN.cardGap;
+            const cardsRect = {
+              left:
+                bannerRect.left + (bannerRect.width - cardsWidth) / 2,
+              top: bannerRect.top - DESIGN.cardHeight + 30,
+              width: cardsWidth,
+              height: DESIGN.cardHeight,
+            };
+            const actionRect = mirrorRect(
+              localRects.action,
+              DESIGN.seatUnitWidth,
+              DESIGN.seatUnitHeight,
+              seat.layout.flipX,
+              seat.layout.flipY
             );
 
             return (
-              <div key={seat.id}>
+              <div
+                key={seat.id}
+                style={{
+                  ...styles.seatGroup,
+                  left: seat.left,
+                  top: seat.top,
+                  width: DESIGN.seatUnitWidth * scale,
+                  height: DESIGN.seatUnitHeight * scale,
+                }}
+              >
                 <div
                   style={{
                     ...styles.holeCards,
-                    left: cardPoint.x,
-                    top: cardPoint.y,
-                    width:
-                      DESIGN.cardWidth * 2 * scale + DESIGN.cardGap * scale,
+                    left: cardsRect.left * scale,
+                    top: cardsRect.top * scale,
+                    width: cardsRect.width * scale,
                     gap: DESIGN.cardGap * scale,
+                    zIndex: 1,
                   }}
                 >
                   <div
@@ -212,10 +285,13 @@ export default function TablePage() {
                 <div
                   style={{
                     ...styles.actionTag,
-                    left: actionPoint.x,
-                    top: actionPoint.y,
-                    padding: `${10 * scale}px ${16 * scale}px`,
-                    fontSize: `${14 * scale}px`,
+                    left: actionRect.left * scale,
+                    top:
+                      (actionRect.top + (seat.layout.actionNudgeY ?? 0)) * scale,
+                    width: actionRect.width * scale,
+                    height: actionRect.height * scale,
+                    zIndex: 2,
+                    fontSize: `${13 * scale}px`,
                   }}
                 >
                   {seat.action}
@@ -224,12 +300,13 @@ export default function TablePage() {
                 <div
                   style={{
                     ...styles.seat,
-                    left: seatPoint.x,
-                    top: seatPoint.y,
+                    left: bannerRect.left * scale,
+                    top: bannerRect.top * scale,
                     width: DESIGN.seatWidth * scale,
                     height: DESIGN.seatHeight * scale,
-                    gap: 16 * scale,
-                    padding: 16 * scale,
+                    gap: 14 * scale,
+                    padding: 14 * scale,
+                    zIndex: 3,
                   }}
                 >
                   <div
@@ -274,8 +351,7 @@ const styles = {
     display: "grid",
     placeItems: "center",
     padding: "24px",
-    background:
-      "radial-gradient(circle at top, #17201b 0%, #09110d 52%, #050807 100%)",
+    background: "#07100c",
     color: "#fff",
   },
   viewport: {
@@ -284,23 +360,24 @@ const styles = {
   board: {
     position: "relative" as const,
   },
+  seatGroup: {
+    position: "absolute" as const,
+    transform: "translate(-50%, -50%)",
+    overflow: "visible",
+  },
   tableRim: {
     position: "absolute" as const,
     borderRadius: "9999px",
-    background:
-      "linear-gradient(180deg, rgba(248,248,248,0.45) 0%, rgba(160,160,160,0.18) 24%, rgba(36,36,36,0.95) 100%)",
-    boxShadow:
-      "0 40px 100px rgba(0,0,0,0.55), inset 0 2px 1px rgba(255,255,255,0.2)",
-    padding: "18px",
+    background: "#2e2e2e",
+    boxShadow: "none",
+    padding: "14px",
   },
   tableSurface: {
     width: "100%",
     height: "100%",
     borderRadius: "9999px",
-    background:
-      "radial-gradient(circle at 50% 0%, rgba(72, 180, 103, 0.18) 0%, rgba(23, 120, 57, 0.12) 28%, rgba(17, 94, 49, 0.95) 58%, rgba(11, 59, 31, 1) 100%)",
-    boxShadow:
-      "inset 0 0 0 1px rgba(255,255,255,0.1), inset 0 0 60px rgba(0,0,0,0.34)",
+    background: "#1b6f3c",
+    boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08)",
   },
   centerStack: {
     position: "absolute" as const,
@@ -310,14 +387,14 @@ const styles = {
     position: "absolute" as const,
     left: "50%",
     transform: "translateX(-50%)",
-    borderRadius: "16px",
+    borderRadius: "18px",
     background: "rgba(0,0,0,0.22)",
     border: "1px solid rgba(255,255,255,0.08)",
     display: "grid",
     placeItems: "center",
     alignContent: "center",
-    gap: "4px",
-    backdropFilter: "blur(8px)",
+    gap: "2px",
+    padding: "10px 20px",
   },
   potLabel: {
     fontSize: "11px",
@@ -339,44 +416,38 @@ const styles = {
   },
   communityCard: {
     borderRadius: "12px",
-    border: "1px solid rgba(255,255,255,0.12)",
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(243,243,243,0.96) 100%)",
-    boxShadow:
-      "0 14px 28px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.75)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    background: "#f1f1f1",
+    boxShadow: "none",
   },
   holeCards: {
     position: "absolute" as const,
-    transform: "translate(-50%, -50%)",
     display: "flex",
   },
   holeCard: {
     borderRadius: "10px",
-    border: "1px solid rgba(255,255,255,0.12)",
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(246,246,246,0.96) 100%)",
-    boxShadow:
-      "0 12px 22px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.7)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    background: "#f1f1f1",
+    boxShadow: "none",
   },
   actionTag: {
     position: "absolute" as const,
-    transform: "translate(-50%, -50%)",
     borderRadius: "9999px",
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(0,0,0,0.26)",
-    color: "rgba(255,255,255,0.88)",
-    backdropFilter: "blur(10px)",
-    letterSpacing: "0.08em",
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(0,0,0,0.2)",
+    color: "rgba(255,255,255,0.82)",
+    display: "grid",
+    placeItems: "center",
+    letterSpacing: "0.06em",
     textTransform: "uppercase" as const,
     whiteSpace: "nowrap",
   },
   seat: {
     position: "absolute" as const,
-    transform: "translate(-50%, -50%)",
-    borderRadius: "20px",
-    background: "rgba(0,0,0,0.9)",
-    border: "1px solid rgba(255,255,255,0.18)",
-    boxShadow: "0 18px 36px rgba(0,0,0,0.42)",
+    borderRadius: "18px",
+    background: "#090909",
+    border: "1px solid rgba(255,255,255,0.14)",
+    boxShadow: "none",
     display: "flex",
     alignItems: "center",
     gap: "16px",
@@ -385,9 +456,8 @@ const styles = {
   avatar: {
     flex: "0 0 auto",
     borderRadius: "9999px",
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.1) 100%)",
-    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(255,255,255,0.1)",
+    border: "1px solid rgba(255,255,255,0.12)",
   },
   seatText: {
     display: "grid",
