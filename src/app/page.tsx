@@ -1,13 +1,14 @@
 "use client";
 
 import {
+  useAnimationControls,
   motion,
   useMotionValue,
   useReducedMotion,
   useSpring,
   useTransform,
 } from "framer-motion";
-import type { CSSProperties, PointerEvent } from "react";
+import type { CSSProperties, MouseEvent, PointerEvent } from "react";
 import { useState } from "react";
 
 type Suit = "spades" | "hearts" | "diamonds" | "clubs";
@@ -23,6 +24,25 @@ type CardData = CardTemplate & {
   suit: Suit;
   suitLabel: string;
   isRed: boolean;
+  isFolded: boolean;
+};
+
+type PokerCardProps = CardData & {
+  flickTuning: FlickTuning;
+};
+
+type FlickTuning = {
+  force: number;
+  snapBack: number;
+  damping: number;
+  cornerBias: number;
+};
+
+const defaultFlickTuning: FlickTuning = {
+  force: 0.75,
+  snapBack: 260,
+  damping: 18,
+  cornerBias: 1,
 };
 
 const cards: CardTemplate[] = [
@@ -40,8 +60,12 @@ const cards: CardTemplate[] = [
 
 export default function Home() {
   const [suits, setSuits] = useState<[Suit, Suit]>(["spades", "hearts"]);
+  const [isFolded, setIsFolded] = useState(false);
+  const [flickTuning, setFlickTuning] = useState(defaultFlickTuning);
+  const [isTuningOpen, setIsTuningOpen] = useState(true);
+  const [openSuitPicker, setOpenSuitPicker] = useState<number | null>(null);
   const hand = cards.map((card, index) =>
-    createCardData(card, suits[index], index === 0 ? 0 : -24)
+    createCardData(card, suits[index], index === 0 ? 0 : -24, isFolded)
   );
 
   return (
@@ -51,40 +75,115 @@ export default function Home() {
           <p style={styles.kicker}>Poker hand</p>
           <h1 style={styles.title}>Two-card hand</h1>
           <p style={styles.subtitle}>
-            Hover each card to tilt it toward the cursor. Click to flip it.
+            Hover each card to tilt it toward the cursor. Use Fold to turn the
+            whole hand.
           </p>
         </div>
 
         <div style={styles.menuBar}>
           {suits.map((suit, index) => (
-            <label key={`suit-${index}`} style={styles.menuItem}>
-              <span style={styles.menuLabel}>
-                {index === 0 ? "Left card" : "Right card"}
-              </span>
-              <select
-                value={suit}
-                onChange={(event) => {
-                  const nextSuit = event.target.value as Suit;
-                  setSuits((current) => {
-                    const next = [...current] as [Suit, Suit];
-                    next[index] = nextSuit;
-                    return next;
-                  });
-                }}
-                style={styles.select}
-              >
-                <option value="spades">Spades</option>
-                <option value="hearts">Hearts</option>
-                <option value="diamonds">Diamonds</option>
-                <option value="clubs">Clubs</option>
-              </select>
-            </label>
+            <SuitPicker
+              key={`suit-${index}`}
+              label={index === 0 ? "Left card" : "Right card"}
+              value={suit}
+              isOpen={openSuitPicker === index}
+              onToggle={() =>
+                setOpenSuitPicker((current) => (current === index ? null : index))
+              }
+              onClose={() => setOpenSuitPicker((current) => (current === index ? null : current))}
+              onSelect={(nextSuit) => {
+                setSuits((current) => {
+                  const next = [...current] as [Suit, Suit];
+                  next[index] = nextSuit;
+                  return next;
+                });
+                setOpenSuitPicker(null);
+              }}
+            />
           ))}
         </div>
 
+        <button
+          type="button"
+          onClick={() => setIsFolded((current) => !current)}
+          style={styles.foldButton}
+        >
+          {isFolded ? "Reveal hand" : "Fold"}
+        </button>
+
+        <section style={styles.tuningPanel} aria-label="Flick tuning">
+          <button
+            type="button"
+            onClick={() => setIsTuningOpen((current) => !current)}
+            style={styles.tuningToggle}
+            aria-expanded={isTuningOpen}
+          >
+            <div>
+              <p style={styles.tuningKicker}>Flick tuning</p>
+              <p style={styles.tuningText}>
+                Adjust the impulse live. Lower values keep the card subtler.
+              </p>
+            </div>
+            <span style={styles.tuningChevron}>{isTuningOpen ? "▾" : "▸"}</span>
+          </button>
+          <div
+            style={{
+              ...styles.tuningBody,
+              display: isTuningOpen ? "grid" : "none",
+            }}
+          >
+            <div style={styles.sliderGrid}>
+              <SliderRow
+                label="Flick Force"
+                value={flickTuning.force}
+                min={0.35}
+                max={1.2}
+                step={0.01}
+                format={(value) => value.toFixed(2)}
+                onChange={(value) =>
+                  setFlickTuning((current) => ({ ...current, force: value }))
+                }
+              />
+              <SliderRow
+                label="Snap Back"
+                value={flickTuning.snapBack}
+                min={160}
+                max={360}
+                step={1}
+                format={(value) => `${Math.round(value)}`}
+                onChange={(value) =>
+                  setFlickTuning((current) => ({ ...current, snapBack: value }))
+                }
+              />
+              <SliderRow
+                label="Damping"
+                value={flickTuning.damping}
+                min={10}
+                max={30}
+                step={1}
+                format={(value) => `${Math.round(value)}`}
+                onChange={(value) =>
+                  setFlickTuning((current) => ({ ...current, damping: value }))
+                }
+              />
+              <SliderRow
+                label="Corner Bias"
+                value={flickTuning.cornerBias}
+                min={0.6}
+                max={1.5}
+                step={0.01}
+                format={(value) => value.toFixed(2)}
+                onChange={(value) =>
+                  setFlickTuning((current) => ({ ...current, cornerBias: value }))
+                }
+              />
+            </div>
+          </div>
+        </section>
+
         <div style={styles.hand}>
           {hand.map((card) => (
-            <PokerCard key={`${card.rank}-${card.suit}`} {...card} />
+            <PokerCard key={`${card.rank}-${card.suit}`} {...card} flickTuning={flickTuning} />
           ))}
         </div>
       </div>
@@ -100,10 +199,12 @@ function PokerCard({
   offsetY = 0,
   tilt = 0,
   overlap = 0,
-}: CardData) {
+  isFolded,
+  flickTuning,
+}: PokerCardProps) {
   const prefersReducedMotion = useReducedMotion();
-  const [flipped, setFlipped] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const flickControls = useAnimationControls();
 
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
@@ -149,6 +250,56 @@ function PokerCard({
     setIsHovered(false);
   };
 
+  const triggerFlick = async (event: MouseEvent<HTMLButtonElement>) => {
+    if (prefersReducedMotion) {
+      return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const hasPointerCoords = event.clientX !== 0 || event.clientY !== 0;
+    const currentX = hasPointerCoords
+      ? event.clientX - rect.left
+      : rect.width / 2;
+    const currentY = hasPointerCoords
+      ? event.clientY - rect.top
+      : rect.height / 2;
+    const xRatio = currentX / rect.width - 0.5;
+    const yRatio = currentY / rect.height - 0.5;
+
+    const cornerWeight = 0.85 + flickTuning.cornerBias * 0.55;
+    const pushRotateX = Math.max(
+      -14,
+      Math.min(14, -yRatio * 20 * flickTuning.force * cornerWeight)
+    );
+    const pushRotateY = Math.max(
+      -14,
+      Math.min(14, xRatio * 20 * flickTuning.force * cornerWeight)
+    );
+    await flickControls.start({
+      rotateX: pushRotateX,
+      rotateY: pushRotateY,
+      y: 0,
+      scale: 1,
+      transition: {
+        duration: 0.035,
+        ease: "easeOut",
+      },
+    });
+
+    await flickControls.start({
+      rotateX: 0,
+      rotateY: 0,
+      y: 0,
+      scale: 1,
+      transition: {
+        type: "spring",
+        stiffness: flickTuning.snapBack,
+        damping: flickTuning.damping,
+        mass: 0.82,
+      },
+    });
+  };
+
   return (
     <div
       style={{
@@ -159,9 +310,9 @@ function PokerCard({
     >
       <motion.button
         type="button"
-        aria-pressed={flipped}
-        aria-label={`${rank} of ${suitLabel}. Click to flip.`}
-        onClick={() => setFlipped((current) => !current)}
+        aria-pressed={isFolded}
+        aria-label={`${rank} of ${suitLabel}. Click to flick the card.`}
+        onClick={triggerFlick}
         onPointerEnter={(event) => {
           setIsHovered(true);
           updatePointer(event);
@@ -181,49 +332,59 @@ function PokerCard({
         }}
       >
         <motion.div
-          animate={{ rotateY: flipped ? 180 : 0 }}
-          transition={
-            prefersReducedMotion
-              ? { duration: 0 }
-              : { type: "spring", stiffness: 240, damping: 26 }
-          }
+          animate={flickControls}
+          initial={false}
           style={{
-            ...styles.flipStage,
+            ...styles.flickStage,
+            transformOrigin: "50% 50%",
             transformStyle: "preserve-3d",
           }}
         >
-          <div style={styles.faceFront}>
-            <motion.div
-              animate={{ opacity: isHovered && !prefersReducedMotion ? 0.25 : 0 }}
-              transition={{ duration: 0.2 }}
-              style={{
-                position: "absolute",
-                width: "360px",
-                height: "360px",
-                borderRadius: "9999px",
-                pointerEvents: "none",
-                left: sheenX,
-                top: sheenY,
-              }}
-            >
-              <div
+          <motion.div
+            animate={{ rotateY: isFolded ? 180 : 0 }}
+            transition={
+              prefersReducedMotion
+                ? { duration: 0 }
+                : { type: "spring", stiffness: 240, damping: 26 }
+            }
+            style={{
+              ...styles.flipStage,
+              transformStyle: "preserve-3d",
+            }}
+          >
+            <div style={styles.faceFront}>
+              <motion.div
+                animate={{ opacity: isHovered && !prefersReducedMotion ? 0.25 : 0 }}
+                transition={{ duration: 0.2 }}
                 style={{
-                  ...styles.sheen,
-                  background:
-                    "radial-gradient(circle, rgba(255,255,255,0.9), rgba(255,255,255,0) 72%)",
+                  position: "absolute",
+                  width: "360px",
+                  height: "360px",
+                  borderRadius: "9999px",
+                  pointerEvents: "none",
+                  left: sheenX,
+                  top: sheenY,
                 }}
-              />
-            </motion.div>
-            <PokerFace rank={rank} suit={suit} isRed={isRed} />
-          </div>
-
-          <div aria-hidden="true" style={styles.faceBack}>
-            <div style={styles.backStripe} />
-            <div style={styles.backInnerRing} />
-            <div style={styles.backCenter}>
-              <div style={styles.backBadge}>Back</div>
+              >
+                <div
+                  style={{
+                    ...styles.sheen,
+                    background:
+                      "radial-gradient(circle, rgba(255,255,255,0.9), rgba(255,255,255,0) 72%)",
+                  }}
+                />
+              </motion.div>
+              <PokerFace rank={rank} suit={suit} isRed={isRed} />
             </div>
-          </div>
+
+            <div aria-hidden="true" style={styles.faceBack}>
+              <div style={styles.backStripe} />
+              <div style={styles.backInnerRing} />
+              <div style={styles.backCenter}>
+                <div style={styles.backBadge}>Back</div>
+              </div>
+            </div>
+          </motion.div>
         </motion.div>
       </motion.button>
 
@@ -231,6 +392,99 @@ function PokerCard({
         {rank} of {suitLabel}
       </div>
     </div>
+  );
+}
+
+function SuitPicker({
+  label,
+  value,
+  isOpen,
+  onToggle,
+  onClose,
+  onSelect,
+}: {
+  label: string;
+  value: Suit;
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onSelect: (value: Suit) => void;
+}) {
+  const options: Suit[] = ["spades", "hearts", "diamonds", "clubs"];
+
+  return (
+    <div style={styles.menuItem} onBlur={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+        onClose();
+      }
+    }}>
+      <span style={styles.menuLabel}>{label}</span>
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        onClick={onToggle}
+        style={styles.suitButton}
+      >
+        <span>{value.charAt(0).toUpperCase() + value.slice(1)}</span>
+        <span style={styles.suitChevron}>{isOpen ? "▴" : "▾"}</span>
+      </button>
+      {isOpen ? (
+        <div style={styles.suitMenu} role="listbox" aria-label={label}>
+          {options.map((option) => (
+            <button
+              key={option}
+              type="button"
+              role="option"
+              aria-selected={option === value}
+              onClick={() => onSelect(option)}
+              style={{
+                ...styles.suitOption,
+                ...(option === value ? styles.suitOptionActive : {}),
+              }}
+            >
+              {option.charAt(0).toUpperCase() + option.slice(1)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SliderRow({
+  label,
+  value,
+  min,
+  max,
+  step,
+  format,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  format: (value: number) => string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label style={styles.sliderRow}>
+      <div style={styles.sliderRowLabel}>
+        <span>{label}</span>
+        <span>{format(value)}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        style={styles.sliderInput}
+      />
+    </label>
   );
 }
 
@@ -350,7 +604,8 @@ function PokerFace({
 function createCardData(
   card: CardTemplate,
   suit: Suit,
-  overlap: number
+  overlap: number,
+  isFolded: boolean
 ): CardData {
   const suitLabel = suit.charAt(0).toUpperCase() + suit.slice(1);
 
@@ -360,6 +615,7 @@ function createCardData(
     suitLabel,
     isRed: suit === "hearts" || suit === "diamonds",
     overlap,
+    isFolded,
   };
 }
 
@@ -371,6 +627,82 @@ const styles: Record<string, CSSProperties> = {
     color: "#fff",
     background:
       "radial-gradient(circle at top, #1f7a44 0%, #0f3b24 42%, #07150d 100%)",
+  },
+  tuningPanel: {
+    width: "min(720px, 100%)",
+    borderRadius: "20px",
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.06)",
+    padding: "16px",
+    display: "grid",
+    gap: "14px",
+    backdropFilter: "blur(14px)",
+  },
+  tuningToggle: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: "16px",
+    width: "100%",
+    border: 0,
+    background: "transparent",
+    color: "inherit",
+    padding: 0,
+    cursor: "pointer",
+    textAlign: "left",
+  },
+  tuningBody: {
+    display: "grid",
+    gap: "14px",
+  },
+  tuningChevron: {
+    flex: "0 0 auto",
+    marginTop: "2px",
+    fontSize: "18px",
+    color: "rgba(255,255,255,0.82)",
+  },
+  tuningHeader: {
+    display: "grid",
+    gap: "4px",
+  },
+  tuningKicker: {
+    margin: 0,
+    fontSize: "11px",
+    letterSpacing: "0.28em",
+    textTransform: "uppercase",
+    color: "rgba(255,255,255,0.68)",
+  },
+  tuningText: {
+    margin: 0,
+    fontSize: "13px",
+    lineHeight: 1.5,
+    color: "rgba(255,255,255,0.72)",
+  },
+  sliderGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: "12px",
+  },
+  sliderRow: {
+    display: "grid",
+    gap: "8px",
+    padding: "10px 12px 12px",
+    borderRadius: "16px",
+    background: "rgba(0,0,0,0.1)",
+    border: "1px solid rgba(255,255,255,0.08)",
+  },
+  sliderRowLabel: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "12px",
+    fontSize: "12px",
+    letterSpacing: "0.18em",
+    textTransform: "uppercase",
+    color: "rgba(255,255,255,0.78)",
+  },
+  sliderInput: {
+    width: "100%",
+    accentColor: "#f4d7a1",
   },
   shell: {
     minHeight: "calc(100vh - 96px)",
@@ -418,6 +750,7 @@ const styles: Record<string, CSSProperties> = {
     flexDirection: "column",
     gap: "6px",
     minWidth: "150px",
+    position: "relative",
   },
   menuLabel: {
     fontSize: "11px",
@@ -425,17 +758,63 @@ const styles: Record<string, CSSProperties> = {
     textTransform: "uppercase",
     color: "rgba(255,255,255,0.72)",
   },
-  select: {
-    appearance: "none",
-    WebkitAppearance: "none",
-    MozAppearance: "none",
+  suitButton: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "12px",
     borderRadius: "14px",
-    border: "1px solid rgba(255,255,255,0.2)",
-    background: "rgba(255,255,255,0.08)",
-    color: "#fff",
+    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(14, 52, 31, 0.7)",
+    color: "#f8fafc",
     padding: "12px 14px",
     fontSize: "14px",
     outline: "none",
+    backdropFilter: "blur(12px)",
+    cursor: "pointer",
+  },
+  suitChevron: {
+    fontSize: "12px",
+    color: "rgba(255,255,255,0.78)",
+  },
+  suitMenu: {
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    marginTop: "6px",
+    borderRadius: "14px",
+    overflow: "hidden",
+    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(8, 34, 20, 0.96)",
+    boxShadow: "0 18px 40px rgba(0,0,0,0.35)",
+  },
+  suitOption: {
+    display: "block",
+    width: "100%",
+    border: 0,
+    background: "transparent",
+    color: "#f8fafc",
+    textAlign: "left",
+    padding: "12px 14px",
+    fontSize: "14px",
+    cursor: "pointer",
+  },
+  suitOptionActive: {
+    background: "rgba(244, 215, 161, 0.16)",
+    color: "#fff5d8",
+  },
+  foldButton: {
+    border: "1px solid rgba(255,255,255,0.18)",
+    borderRadius: "9999px",
+    padding: "12px 20px",
+    background: "rgba(255,255,255,0.1)",
+    color: "#fff",
+    fontSize: "14px",
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    cursor: "pointer",
     backdropFilter: "blur(12px)",
   },
   hand: {
@@ -463,6 +842,11 @@ const styles: Record<string, CSSProperties> = {
     MozAppearance: "none",
   },
   flipStage: {
+    position: "absolute",
+    inset: 0,
+    borderRadius: "24px",
+  },
+  flickStage: {
     position: "absolute",
     inset: 0,
     borderRadius: "24px",
